@@ -17,15 +17,22 @@ import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat; //호환성 처리
 import android.os.Bundle; //Activity 시작할 때 전달되는 데이터
+import android.widget.TextView;
+
 import androidx.appcompat.app.AppCompatActivity; //Activity의 추가 기능 지원
 
 public class MainActivity extends AppCompatActivity {
-
     private static final String LOG_TAG = "ZJZTEST";
+    private TextView rssiText;
 
     @Override
     protected void onCreate(Bundle saveInstanceState) { //saveInstanceState는 화면의 상태를 저장하는 객체
         super.onCreate(saveInstanceState);
+
+        setContentView(R.layout.main_activity);
+
+        rssiText = findViewById(R.id.rssiText);
+        rssiText.setText("앱 실행됨. RSSI 강도 측정 중...");
 
         registerReceiver(rssiReceiver, new IntentFilter(WifiManager.RSSI_CHANGED_ACTION));
     }
@@ -40,6 +47,7 @@ public class MainActivity extends AppCompatActivity {
 
             int _rssi = info.getRssi();
 
+            rssiText.setText("RSSI 신호 강도 : " + _rssi);
             Log.e(LOG_TAG, "_rssi ==> " + _rssi);
         }
     };
