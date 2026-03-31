@@ -5,16 +5,35 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <TextView
-        android:id="@+id/rssiText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="RSSI 신호 강도 측정 중..."
-        android:textSize="24sp"
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        tools:layout_editor_absoluteX="0dp"
+        tools:layout_editor_absoluteY="0dp">
 
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/wifiScanResult"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Scan 결과 대기 중.."
+                android:textSize="16sp"
+                android:lineSpacingExtra="8dp"/>
+
+            <TextView
+                android:id="@+id/rssiText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="RSSI 신호 강도 측정 중..."
+                android:textSize="16sp" />
+        </LinearLayout>
+
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
