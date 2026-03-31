@@ -9,6 +9,8 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager; //wifi 스캔, 현재 연결 상태 확인, 스캔 결과 확인
 import android.net.wifi.ScanResult; //wifi 하나의 정보 객체를 저장
 import java.util.List; //리스트
+
+import android.os.Handler;
 import android.util.Log; //android studio Log
 import android.Manifest;
 import android.content.pm.PackageManager; //pm은 permission을 뜻함. 권한 확인 결과를 비교할 때 쓰는 상수를 제공
@@ -29,6 +31,22 @@ public class MainActivity extends AppCompatActivity {
     private WifiManager wifiManager;
     private static int callCount = 0;
 
+    private static Handler handler = new Handler();
+    private final Runnable scanRunnable = new Runnable() {
+        @Override
+        public void run() {
+            boolean success = wifiManager.startScan();
+            if(success) {
+                scanSuccess();
+                callCount += 1;
+            }
+            else {
+                scanFailure();
+            }
+            handler.postDelayed(this, 10000);
+        }
+    };
+
     @Override
     protected void onCreate(Bundle saveInstanceState) { //saveInstanceState는 화면의 상태를 저장하는 객체
         super.onCreate(saveInstanceState);
@@ -48,14 +66,7 @@ public class MainActivity extends AppCompatActivity {
         registerReceiver(wifiScanReceiver, intentFilter);
         registerReceiver(rssiReceiver, new IntentFilter(WifiManager.RSSI_CHANGED_ACTION));
 
-        boolean success = wifiManager.startScan();
-        if(success) {
-            scanSuccess();
-            callCount += 1;
-        }
-        else {
-            scanFailure();
-        }
+        handler.post(scanRunnable);
     }
     private BroadcastReceiver wifiScanReceiver = new BroadcastReceiver() {
         @Override
@@ -101,8 +112,8 @@ public class MainActivity extends AppCompatActivity {
         String str = new String();
 
         for (ScanResult result : results) {
-            Log.d(LOG_TAG, "Call count = " + callCount + ", SSID = " + result.SSID + "BSSID" + result.BSSID + ", level = " + result.level);
-            str += "SSID = " + result.SSID + ", level = " + result.level + "\n";
+            Log.d(LOG_TAG, "Call count = " + callCount + ", SSID = " + result.SSID + "BSSID" + result.BSSID + ", level : " + result.level);
+            str += "SSID : " + result.SSID + ", RSSI : " + result.level + "\n";
         }
 
         wifiScanText.setText(str);
