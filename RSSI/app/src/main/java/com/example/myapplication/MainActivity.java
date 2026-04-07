@@ -1,6 +1,10 @@
 package com.example.myapplication;
 
 import android.app.Activity;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.le.BluetoothLeScanner;
+import android.bluetooth.le.ScanCallback;
 import android.content.BroadcastReceiver;
 import android.content.Context; //앱의 환경과 정보 접근에 사용함
 import android.content.Intent;
@@ -11,12 +15,15 @@ import android.net.wifi.ScanResult; //wifi 하나의 정보 객체를 저장
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List; //리스트
+import java.util.Map;
 
 import android.os.Handler;
 import android.util.Log; //android studio Log
 import android.Manifest;
 import android.content.pm.PackageManager; //pm은 permission을 뜻함. 권한 확인 결과를 비교할 때 쓰는 상수를 제공
+import android.os.Build;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -32,6 +39,9 @@ public class MainActivity extends AppCompatActivity {
     private TextView rssiText;
     private TextView wifiScanText;
     private WifiManager wifiManager;
+    private BluetoothManager bluetoothManager;
+    private BluetoothAdapter bluetoothAdapter;
+    private BluetoothLeScanner bluetoothLeScanner;
     private static int callCount = 0;
     private static Handler handler = new Handler();
     private static final int WIFI_PERMISSION_REQUEST_CODE = 100;
@@ -51,26 +61,6 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    /*private void checkWifiPermission() {
-        List<String> permissionList = new ArrayList<>();
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            Log.d(LOG_TAG, "permission denied : ACCESS_FINE_LOCATION");
-            permissionList.add(Manifest.permission.ACCESS_FINE_LOCATION);
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CHANGE_WIFI_STATE) != PackageManager.PERMISSION_GRANTED) {
-            Log.d(LOG_TAG, "permission denied : CHANGE_WIFI_STATE");
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED) {
-            Log.d(LOG_TAG, "permission denied : ACCESS_WIFI_STATE");
-        }
-        if(!permissionList.isEmpty()) {
-            permissionLauncher.launch(permissionList.toArray(new String[0]));
-        } else {
-            Log.d(LOG_TAG, "권한 모두 허용됨");
-        }
-    }*/
-
     @Override
     protected void onCreate(Bundle saveInstanceState) { //saveInstanceState는 화면의 상태를 저장하는 객체
         super.onCreate(saveInstanceState);
@@ -89,12 +79,37 @@ public class MainActivity extends AppCompatActivity {
 
         wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
 
+        bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+
+        if (bluetoothManager == null) {
+            Log.d(LOG_TAG, "BluetoothManager null");
+            return;
+        }
+
+        bluetoothAdapter = bluetoothManager.getAdapter();
+
+        if (bluetoothAdapter == null) {
+            Log.d(LOG_TAG, "블루투스 지원 안함");
+            return;
+        }
+
+        bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
+
+        if (bluetoothLeScanner == null) {
+            Log.d(LOG_TAG, "BluetoothLeScanner null");
+            return;
+        }
+
+        bluetoothStateCheck();
+
+        checkAndRequestBlePermissions();
+
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
         registerReceiver(wifiScanReceiver, intentFilter);
         registerReceiver(rssiReceiver, new IntentFilter(WifiManager.RSSI_CHANGED_ACTION));
 
-        handler.post(scanRunnable);
+        //handler.post(scanRunnable);
     }
     private BroadcastReceiver wifiScanReceiver = new BroadcastReceiver() {
         @Override
@@ -124,23 +139,6 @@ public class MainActivity extends AppCompatActivity {
             Log.e(LOG_TAG, "_rssi ==> " + _rssi);
         }
     };
-
-    /*private final ActivityResultLauncher<String[]> permissionLauncher =
-            registerForActivityResult(
-                    new ActivityResultContracts.RequestMultiplePermissions(),
-                    result -> {
-                        Boolean fineLocationGranted = result.getOrDefault(
-                                Manifest.permission.ACCESS_FINE_LOCATION, false
-                        );
-
-                        if (Boolean.TRUE.equals(fineLocationGranted)) {
-                            Log.d(LOG_TAG, "권한 허용됨");
-                        } else {
-                            Log.d(LOG_TAG, "권한 거부됨");
-                        }
-                    }
-            );*/
-
     private void scanSuccess() {
         if (wifiManager == null) {
             Log.d(LOG_TAG, "wifiManager null");
@@ -171,5 +169,137 @@ public class MainActivity extends AppCompatActivity {
 
     private void scanFailure() {
         Log.d(LOG_TAG, "scan Failure");
+    }
+
+    private void bluetoothStateCheck() {
+        if (bluetoothManager == null) {
+            Log.d(LOG_TAG, "bluetooth  권한 없음");
+            return;
+        }
+
+        if (bluetoothAdapter == null) {
+            Log.d(LOG_TAG, "bluetooth  어댑터 연결 안됨.");
+            return;
+        }
+
+        if (!bluetoothAdapter.isEnabled()) {
+            Log.d(LOG_TAG, "bluetooh  꺼져있음");
+            return;
+        }
+    }
+
+    private boolean scanning;
+    private void scanLeDevice() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED)  {
+            Log.d(LOG_TAG, "permission denied : BLUETOOTH_SCAN");
+            return;
+        }
+        if (!scanning) {
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                        Log.d(LOG_TAG, "permission denied in stopScan");
+                        return;
+                    }
+
+                    scanning = false;
+                    bluetoothLeScanner.stopScan(leScanCallback);
+                }
+            }, 10000);
+
+            scanning = true;
+            bluetoothLeScanner.startScan(leScanCallback);
+        } else {
+            scanning = false;
+            bluetoothLeScanner.stopScan(leScanCallback);
+        }
+    }
+
+    private Map<String, Integer> rssiMap = new HashMap<>();
+    private ScanCallback leScanCallback = new ScanCallback() {
+        @Override
+        public void onScanResult(int callbackType, android.bluetooth.le.ScanResult result) {
+            super.onScanResult(callbackType, result);
+            String address = result.getDevice().getAddress();
+            int rssi = result.getRssi();
+            Log.d(LOG_TAG, address + " / " + rssi);
+            rssiMap.put(address, rssi);
+            runOnUiThread(() -> updateUI());
+        }
+    };
+
+    private void updateUI() {
+        StringBuilder sb = new StringBuilder();
+
+        for (Map.Entry<String, Integer> entry : rssiMap.entrySet()) {
+            sb.append(entry.getKey())
+                    .append(" / ")
+                    .append(entry.getValue())
+                    .append("\n");
+        }
+
+        wifiScanText.setText(sb.toString());
+    }
+
+    private static final int BLE_PERMISSION_REQUEST_CODE = 100;
+
+    private void checkAndRequestBlePermissions() {
+
+        List<String> permissionList = new ArrayList<>();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN)
+                    != PackageManager.PERMISSION_GRANTED) {
+                permissionList.add(Manifest.permission.BLUETOOTH_SCAN);
+            }
+
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
+                    != PackageManager.PERMISSION_GRANTED) {
+                permissionList.add(Manifest.permission.BLUETOOTH_CONNECT);
+            }
+        } else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                    != PackageManager.PERMISSION_GRANTED) {
+                permissionList.add(Manifest.permission.ACCESS_FINE_LOCATION);
+            }
+        }
+
+        if (!permissionList.isEmpty()) {
+            ActivityCompat.requestPermissions(
+                    this,
+                    permissionList.toArray(new String[0]),
+                    BLE_PERMISSION_REQUEST_CODE
+            );
+        } else {
+            Log.d(LOG_TAG, "권한 이미 있음 → 스캔 시작");
+            scanLeDevice();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String[] permissions,
+                                           int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == BLE_PERMISSION_REQUEST_CODE) {
+
+            boolean allGranted = true;
+
+            for (int result : grantResults) {
+                if (result != PackageManager.PERMISSION_GRANTED) {
+                    allGranted = false;
+                    break;
+                }
+            }
+
+            if (allGranted) {
+                Log.d(LOG_TAG, "권한 승인됨 → 스캔 시작");
+                scanLeDevice();
+            } else {
+                Log.d(LOG_TAG, "권한 거부됨 → 스캔 불가");
+            }
+        }
     }
 }
